@@ -14,8 +14,8 @@ int main(int argc, const char * argv[]) {
     bool get_AMFI_patch = false;
     int flags = 0;
     
-    if(argc < 5) {
-        printf("Usage: %s <kernel_in> <kernel_out> <version> [args]\n", argv[0]);
+    if(argc < 4) {
+        printf("Usage: %s <kernel_in> <kernel_out> [args]\n", argv[0]);
         printf("\t-a\t\tDisable AMFI from kernel patch\n");
         return -1;
     }
@@ -39,24 +39,8 @@ int main(int argc, const char * argv[]) {
     
     if (get_AMFI_patch) {
         printf("Kernel: Adding AMFI_get_out_of_my_way patch...\n");
-        for(int i = 0; i < argc; i++) {
-            if(HAS_ARG("10", 0)) {
-                auto p = kpf.get_AMFI_10_patch();
-                patches.insert(patches.end(), p.begin(), p.end());
-            }
-            if(HAS_ARG("11", 0)) {
-                auto p = kpf.get_AMFI_11_patch();
-                patches.insert(patches.end(), p.begin(), p.end());
-            }
-            if(HAS_ARG("12", 0)) {
-                auto p = kpf.get_AMFI_12_patch();
-                patches.insert(patches.end(), p.begin(), p.end());
-            }
-            if(HAS_ARG("13", 0)) {
-                auto p = kpf.get_AMFI_13_patch();
-                patches.insert(patches.end(), p.begin(), p.end());
-            }
-        }
+        auto p = kpf.get_AMFI_10_11_12_13_patch();
+        patches.insert(patches.end(), p.begin(), p.end());
     }
     
     
