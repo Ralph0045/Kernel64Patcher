@@ -1,10 +1,14 @@
 # Kernel64Patcher
-A 64 Bit kernel patcher based on tihmstar's liboffsetfinder64
+A 64 Bit kernel patcher based on xerub's patchfinder64
 
 ## Compiling
-Compile using:
 ```
-./Automatic-build.sh
+gcc Kernel64Patcher.c -o Kernel64Patcher
 ```
-Note: you need brew
-
+## Usage:
+```
+./Kernel64Patcher kcache.raw kcache.patched -a
+```
+## Credits/Thanks
+* xerub for patchfinder64
+* iH8sn0w for code
