@@ -94,11 +94,16 @@ int main(int argc, char **argv) {
     fread(kernel_buf, 1, kernel_len, fp);
     fclose(fp);
     
-    if(memmem(kernel_buf,kernel_len,"IM4P",4)) {
+    if(memmem(kernel_buf,kernel_len,"KernelCacheBuilder",18)) {
         printf("%s: Detected IMG4/IM4P, you have to unpack and decompress it!\n",__FUNCTION__);
         return -1;
     }
-
+    
+    if (*(uint32_t*)kernel_buf == 0xbebafeca) {
+        printf("%s: Detected fat macho kernel\n",__FUNCTION__);
+        memmove(kernel_buf,kernel_buf+28,kernel_len);
+    }
+    
     for(int i=0;i<argc;i++) {
         if(strcmp(argv[i], "-a") == 0) {
             printf("Kernel: Adding AMFI_get_out_of_my_way patch...\n");
