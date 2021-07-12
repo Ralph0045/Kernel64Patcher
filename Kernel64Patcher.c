@@ -257,8 +257,20 @@ int main(int argc, char **argv) {
         return -1;
     }
     
+    int is_fat = 0;
+    void* fat_buf;
     if (*(uint32_t*)kernel_buf == 0xbebafeca) {
         printf("%s: Detected fat macho kernel\n",__FUNCTION__);
+        
+        is_fat = 1;
+        fat_buf = (void*)malloc(28);
+        if(!fat_buf) {
+            printf("%s: Out of memory!\n", __FUNCTION__);
+            free(kernel_buf);
+            return -1;
+        }
+        memcpy(fat_buf, kernel_buf, 28);
+        
         memmove(kernel_buf,kernel_buf+28,kernel_len);
     }
     
@@ -289,6 +301,12 @@ int main(int argc, char **argv) {
         printf("%s: Unable to open %s!\n", __FUNCTION__, argv[2]);
         free(kernel_buf);
         return -1;
+    }
+    
+    if (is_fat == 1) {
+        memmove(kernel_buf, kernel_buf - 28, kernel_len);
+        memcpy(kernel_buf, fat_buf, 28);
+        free(fat_buf);
     }
     
     fwrite(kernel_buf, 1, kernel_len, fp);
