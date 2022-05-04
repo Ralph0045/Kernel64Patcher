@@ -11,6 +11,34 @@
 
 #define GET_OFFSET(kernel_len, x) (x - (uintptr_t) kernel_buf)
 
+#ifdef __linux__
+
+/* Got memmem and put it here manually for ubuntu 20.04 it gives segmentation fault if this function is not added here */
+void *memmem(const void *haystack, size_t hlen, const void *needle, size_t nlen)
+{
+    int needle_first;
+    const void *p = haystack;
+    size_t plen = hlen;
+
+    if (!nlen)
+        return NULL;
+
+    needle_first = *(unsigned char *)needle;
+
+    while (plen >= nlen && (p = memchr(p, needle_first, plen - nlen + 1)))
+    {
+        if (!memcmp(p, needle, nlen))
+            return (void *)p;
+
+        p++;
+        plen = hlen - (p - haystack);
+    }
+
+    return NULL;
+}
+
+#endif
+
 // iOS 15 "%s: firmware validation failed %d\" @%s:%d SPU Firmware Validation Patch
 int get_SPUFirmwareValidation_patch(void *kernel_buf, size_t kernel_len) {
     printf("%s: Entering ...\n",__FUNCTION__);
