@@ -1,6 +1,8 @@
 /*
+*
 * Copyright 2020, @Ralph0045
 * gcc Kernel64Patcher.c -o Kernel64Patcher
+*
 */
 
 #include <stdio.h>
@@ -242,6 +244,8 @@ int get_amfi_out_of_my_way_patch(void* kernel_buf,size_t kernel_len) {
     return 0;
 }
 
+#ifndef KERNEL64PATCHER_NOMAIN
+
 int main(int argc, char **argv) {
     
     printf("%s: Starting...\n", __FUNCTION__);
@@ -329,3 +333,5 @@ int main(int argc, char **argv) {
     
     return 0;
 }
+
+#endif
