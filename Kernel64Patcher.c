@@ -161,6 +161,32 @@ int get_AMFIInitializeLocalSigningPublicKey_patch(void* kernel_buf,size_t kernel
     return 0;
 }
 
+//iOS 14 AppleFirmwareUpdate img4 signature check
+int get_AppleFirmwareUpdate_img4_signature_check(void* kernel_buf,size_t kernel_len) {
+
+    printf("%s: Entering ...\n",__FUNCTION__);
+
+    char img4_sig_check_string[0x56] = "%s::%s() Performing img4 validation outside of workloop";
+    void* ent_loc = memmem(kernel_buf,kernel_len,img4_sig_check_string,55);
+    if(!ent_loc) {
+        printf("%s: Could not find \"%%s::%%s() Performing img4 validation outside of workloop\" string\n",__FUNCTION__);
+        return -1;
+    }
+    printf("%s: Found \"%%s::%%s() Performing img4 validation outside of workloop\" str loc at %p\n",__FUNCTION__,GET_OFFSET(kernel_len,ent_loc));
+    addr_t ent_ref = xref64(kernel_buf,0,kernel_len,(addr_t)GET_OFFSET(kernel_len, ent_loc));
+
+    if(!ent_ref) {
+        printf("%s: Could not find \"%%s::%%s() Performing img4 validation outside of workloop\" xref\n",__FUNCTION__);
+        return -1;
+    }
+    printf("%s: Found \"%%s::%%s() Performing img4 validation outside of workloop\" xref at %p\n",__FUNCTION__,(void*)ent_ref);
+
+    printf("%s: Patching \"%%s::%%s() Performing img4 validation outside of workloop\" at %p\n\n", __FUNCTION__,(void*)(ent_ref + 0xc));
+    *(uint32_t *) (kernel_buf + ent_ref + 0xc) = 0xD2800000;
+
+    return 0;
+}
+
 int get_amfi_out_of_my_way_patch(void* kernel_buf,size_t kernel_len) {
     
     printf("%s: Entering ...\n",__FUNCTION__);
@@ -223,6 +249,7 @@ int main(int argc, char **argv) {
     if(argc < 4){
         printf("Usage: %s <kernel_in> <kernel_out> <args>\n",argv[0]);
         printf("\t-a\t\tPatch AMFI\n");
+        printf("\t-f\t\tPatch AppleFirmwareUpdate img4 signature check\n");
         printf("\t-s\t\tPatch SPUFirmwareValidation (iOS 15 Only)\n");
         printf("\t-r\t\tPatch RootVPNotAuthenticatedAfterMounting (iOS 15 Only)\n");
         printf("\t-p\t\tPatch AMFIInitializeLocalSigningPublicKey (iOS 15 Only)\n");
@@ -266,6 +293,10 @@ int main(int argc, char **argv) {
         if(strcmp(argv[i], "-a") == 0) {
             printf("Kernel: Adding AMFI_get_out_of_my_way patch...\n");
             get_amfi_out_of_my_way_patch(kernel_buf,kernel_len);
+        }
+        if(strcmp(argv[i], "-f") == 0) {
+            printf("Kernel: Adding AppleFirmwareUpdate img4 signature check patch...\n");
+            get_AppleFirmwareUpdate_img4_signature_check(kernel_buf,kernel_len);
         }
         if(strcmp(argv[i], "-s") == 0) {
             printf("Kernel: Adding SPUFirmwareValidation patch...\n");
