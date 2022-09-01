@@ -3,6 +3,10 @@
 * gcc Kernel64Patcher.c -o Kernel64Patcher
 */
 
+#ifdef __gnu_linux__
+    #define _GNU_SOURCE
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,6 +14,10 @@
 #include "patchfinder64.c"
 
 #define GET_OFFSET(kernel_len, x) (x - (uintptr_t) kernel_buf)
+
+static uint32_t arm64_branch_instruction(uintptr_t from, uintptr_t to) {
+  return from > to ? 0x18000000 - (from - to) / 4 : 0x14000000 + (to - from) / 4;
+}
 
 // iOS 15 "%s: firmware validation failed %d\" @%s:%d SPU Firmware Validation Patch
 int get_SPUFirmwareValidation_patch(void *kernel_buf, size_t kernel_len) {
@@ -161,6 +169,127 @@ int get_AMFIInitializeLocalSigningPublicKey_patch(void* kernel_buf,size_t kernel
     return 0;
 }
 
+//iOS 14 AppleFirmwareUpdate img4 signature check
+int get_AppleFirmwareUpdate_img4_signature_check(void* kernel_buf,size_t kernel_len) {
+
+    printf("%s: Entering ...\n",__FUNCTION__);
+
+    char img4_sig_check_string[56] = "%s::%s() Performing img4 validation outside of workloop";
+    void* ent_loc = memmem(kernel_buf,kernel_len,img4_sig_check_string,55);
+    if(!ent_loc) {
+        printf("%s: Could not find \"%%s::%%s() Performing img4 validation outside of workloop\" string\n",__FUNCTION__);
+        return -1;
+    }
+    printf("%s: Found \"%%s::%%s() Performing img4 validation outside of workloop\" str loc at %p\n",__FUNCTION__,GET_OFFSET(kernel_len,ent_loc));
+    addr_t ent_ref = xref64(kernel_buf,0,kernel_len,(addr_t)GET_OFFSET(kernel_len, ent_loc));
+
+    if(!ent_ref) {
+        printf("%s: Could not find \"%%s::%%s() Performing img4 validation outside of workloop\" xref\n",__FUNCTION__);
+        return -1;
+    }
+    printf("%s: Found \"%%s::%%s() Performing img4 validation outside of workloop\" xref at %p\n",__FUNCTION__,(void*)ent_ref);
+
+    printf("%s: Patching \"%%s::%%s() Performing img4 validation outside of workloop\" at %p\n\n", __FUNCTION__,(void*)(ent_ref + 0xc));
+    *(uint32_t *) (kernel_buf + ent_ref + 0xc) = 0xD2800000;
+
+    return 0;
+}
+
+static addr_t
+cbz_ref64_back(const uint8_t *buf, addr_t start, size_t length) {
+
+    //find cbz/cbnz
+    uint32_t cbz_mask = 0x7E000000;
+    uint32_t instr = 0;
+    uint32_t imm = 0;
+    addr_t cbz = start;
+    while (cbz) {
+        instr = *(uint32_t *) (buf + cbz);
+        if ((instr & cbz_mask) == 0x34000000) {
+            imm = ((instr & 0x00FFFFFF) >> 5) << 2;
+            if (cbz + imm == start)
+                return cbz;
+        }
+        cbz -= 4;
+    }
+    return 0;
+}
+
+//iOS 15 "could not authenticate personalized root hash!" patch
+int get_could_not_authenticate_personalized_root_hash_patch(void* kernel_buf,size_t kernel_len) {
+
+    printf("%s: Entering ...\n", __FUNCTION__);
+
+    //get target offset for new branch
+    char roothash_authenticated_string[sizeof("successfully validated on-disk root hash")] = "successfully validated on-disk root hash";
+
+    unsigned char *roothash_authenticated_loc = memmem(kernel_buf, kernel_len, roothash_authenticated_string, sizeof("successfully validated on-disk root hash") - 1);
+    if(!roothash_authenticated_loc) {
+        printf("%s: Could not find \"%s\" string\n", __FUNCTION__, roothash_authenticated_string);
+        return -1;
+    }
+
+    for (; *roothash_authenticated_loc != 0; roothash_authenticated_loc--);
+    roothash_authenticated_loc++;
+    printf("%s: Found \"%s\" str loc at %p\n", __FUNCTION__, roothash_authenticated_string, GET_OFFSET(kernel_len, roothash_authenticated_loc));
+
+    addr_t roothash_authenticated_ref = xref64(kernel_buf,0,kernel_len,(addr_t)GET_OFFSET(kernel_len, roothash_authenticated_loc));
+    if(!roothash_authenticated_ref) {
+        printf("%s: Could not find \"%s\" xref\n",__FUNCTION__, roothash_authenticated_string);
+        return -1;
+    }
+    printf("%s: Found \"%s\" xref at %p\n",__FUNCTION__, roothash_authenticated_string, (void*) roothash_authenticated_ref);
+
+    //get previous cbz
+    addr_t branch_target = step64_back(kernel_buf, roothash_authenticated_ref, 20 * 4, 0x34000000, 0x7E000000);
+    if(!branch_target) {
+        printf("%s: Could not find previous cbz\n",__FUNCTION__);
+        return -1;
+    }
+    printf("%s: Found previous cbz at %p\n",__FUNCTION__, (void*) branch_target);
+    branch_target++;
+
+    //get patching offset for new branch
+    char roothash_failed_string[sizeof("could not authenticate personalized root hash!")] = "could not authenticate personalized root hash!";
+
+    unsigned char *roothash_failed_loc = memmem(kernel_buf, kernel_len, roothash_failed_string, sizeof("could not authenticate personalized root hash!") - 1);
+    if(!roothash_failed_loc) {
+        printf("%s: Could not find \"%s\" string\n", __FUNCTION__, roothash_failed_string);
+        return -1;
+    }
+
+    for (; *roothash_failed_loc != 0; roothash_failed_loc--);
+    roothash_failed_loc++;
+    printf("%s: Found \"%s\" str loc at %p\n", __FUNCTION__, roothash_failed_string, GET_OFFSET(kernel_len, roothash_failed_loc));
+
+    addr_t roothash_failed_ref = xref64(kernel_buf,0,kernel_len,(addr_t)GET_OFFSET(kernel_len, roothash_failed_loc));
+    if(!roothash_failed_ref) {
+        printf("%s: Could not find \"%s\" xref\n",__FUNCTION__, roothash_failed_string);
+        return -1;
+    }
+    printf("%s: Found \"%s\" xref at %p\n",__FUNCTION__, roothash_failed_string, (void*) roothash_failed_ref);
+
+    addr_t patch_loc = 0;
+
+    for (int i = 0; i < 16; i++, roothash_failed_ref -= 4) {
+        if (cbz_ref64_back(kernel_buf, roothash_failed_ref, roothash_failed_ref)) {
+            printf("%s: Found cbz target at %p\n", __FUNCTION__, (void*) roothash_failed_ref);
+            patch_loc = roothash_failed_ref;
+            break;
+        }
+    }
+
+    if (!patch_loc) {
+        printf("%s: Could not find cbz target\n",__FUNCTION__);
+        return -1;
+    }
+
+    printf("%s: Patching root hash check at %p\n",__FUNCTION__, (void*) patch_loc);
+    *((uint32_t *) (kernel_buf + patch_loc)) = arm64_branch_instruction((uintptr_t) patch_loc, (uintptr_t) branch_target);
+
+    return 0;
+}
+
 int get_amfi_out_of_my_way_patch(void* kernel_buf,size_t kernel_len) {
     
     printf("%s: Entering ...\n",__FUNCTION__);
@@ -223,8 +352,10 @@ int main(int argc, char **argv) {
     if(argc < 4){
         printf("Usage: %s <kernel_in> <kernel_out> <args>\n",argv[0]);
         printf("\t-a\t\tPatch AMFI\n");
+        printf("\t-f\t\tPatch AppleFirmwareUpdate img4 signature check\n");
         printf("\t-s\t\tPatch SPUFirmwareValidation (iOS 15 Only)\n");
         printf("\t-r\t\tPatch RootVPNotAuthenticatedAfterMounting (iOS 15 Only)\n");
+        printf("\t-o\t\tPatch could_not_authenticate_personalized_root_hash (iOS 15 Only)\n");
         printf("\t-p\t\tPatch AMFIInitializeLocalSigningPublicKey (iOS 15 Only)\n");
         return 0;
     }
@@ -267,6 +398,10 @@ int main(int argc, char **argv) {
             printf("Kernel: Adding AMFI_get_out_of_my_way patch...\n");
             get_amfi_out_of_my_way_patch(kernel_buf,kernel_len);
         }
+        if(strcmp(argv[i], "-f") == 0) {
+            printf("Kernel: Adding AppleFirmwareUpdate img4 signature check patch...\n");
+            get_AppleFirmwareUpdate_img4_signature_check(kernel_buf,kernel_len);
+        }
         if(strcmp(argv[i], "-s") == 0) {
             printf("Kernel: Adding SPUFirmwareValidation patch...\n");
             get_SPUFirmwareValidation_patch(kernel_buf,kernel_len);
@@ -278,6 +413,10 @@ int main(int argc, char **argv) {
         if(strcmp(argv[i], "-r") == 0) {
             printf("Kernel: Adding RootVPNotAuthenticatedAfterMounting patch...\n");
             get_RootVPNotAuthenticatedAfterMounting_patch(kernel_buf,kernel_len);
+        }
+        if(strcmp(argv[i], "-o") == 0) {
+            printf("Kernel: Adding could_not_authenticate_personalized_root_hash patch...\n");
+            get_could_not_authenticate_personalized_root_hash_patch(kernel_buf,kernel_len);
         }
     }
     
